@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LSB·STEGO</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+  :root {
+    --ink: #1a1a2e;
+    --paper: #f5f2eb;
+    --paper-dark: #ede9df;
+    --accent: #1a4480;
+    --accent-h: #2563a8;
+    --danger: #9b1c1c;
+    --success: #14532d;
+    --warn: #92400e;
+    --mid: #6b7280;
+    --border: #c9c2b4;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; min-height: 100vh; }
+
+  header { border-bottom: 2px solid var(--ink); padding: 18px 40px; display: flex; align-items: baseline; gap: 14px; }
+  header h1 { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+  header span { font-family: var(--mono); font-size: 11px; color: var(--mid); }
+
+  .tabs { border-bottom: 1px solid var(--border); padding: 0 40px; display: flex; }
+  .tab { font-family: var(--mono); font-size: 13px; padding: 11px 22px; cursor: pointer; border: none; background: none; color: var(--mid); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .view { display: none; padding: 32px 40px; max-width: 860px; }
+  .view.active { display: block; }
+
+  section + section { margin-top: 28px; }
+  .label { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--mid); margin-bottom: 8px; display: block; }
+
+  textarea { width: 100%; min-height: 180px; background: white; border: 1px solid var(--border); border-radius: 4px; padding: 13px 15px; font-family: var(--mono); font-size: 13px; line-height: 1.7; color: var(--ink); resize: vertical; outline: none; transition: border-color .15s; }
+  textarea:focus { border-color: var(--accent); }
+  .char-count { font-family: var(--mono); font-size: 11px; color: var(--mid); text-align: right; margin-top: 4px; }
+
+  .drop-zone { border: 1.5px dashed var(--border); border-radius: 6px; padding: 20px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; background: white; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: #f0f4fa; }
+  .drop-zone input { display: none; }
+  .drop-hint { font-family: var(--mono); font-size: 13px; color: var(--mid); }
+  .drop-hint strong { color: var(--accent); }
+  .drop-hint small { display: block; margin-top: 4px; font-size: 11px; }
+
+  /* slots */
+  .slots { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .slot { display: flex; align-items: center; gap: 10px; background: white; border: 1px solid var(--border); border-radius: 4px; padding: 9px 12px; }
+  .slot-thumb { width: 52px; height: 36px; object-fit: cover; border-radius: 2px; flex-shrink: 0; }
+  .slot-info { flex: 1; min-width: 0; }
+  .slot-name { font-family: var(--mono); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot-meta { font-family: var(--mono); font-size: 11px; color: var(--mid); }
+  .slot-cap { font-family: var(--mono); font-size: 11px; white-space: nowrap; text-align: right; }
+  .slot-cap.ok { color: var(--success); }
+  .slot-cap.warn { color: var(--warn); }
+  .slot-cap.over { color: var(--danger); }
+  .slot-remove { background: none; border: none; cursor: pointer; color: var(--mid); font-size: 16px; padding: 0 4px; flex-shrink: 0; }
+  .slot-remove:hover { color: var(--danger); }
+
+  /* capacity */
+  .cap-block { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 16px 18px; }
+  .cap-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+  .cap-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--mid); text-transform: uppercase; letter-spacing: .5px; }
+  .cap-numbers { font-family: var(--mono); font-size: 12px; }
+  .bar-track { height: 9px; background: var(--paper-dark); border-radius: 99px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 99px; transition: width .4s ease, background .3s; }
+  .bar-fill.safe { background: #15803d; }
+  .bar-fill.warning { background: #d97706; }
+  .bar-fill.over { background: var(--danger); width: 100% !important; }
+  .cap-note { margin-top: 9px; font-family: var(--mono); font-size: 12px; }
+  .cap-note.need-more { color: var(--danger); }
+  .cap-note.ok { color: var(--success); }
+
+  /* image plan table */
+  .plan-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: var(--mono); font-size: 12px; }
+  .plan-table th { text-align: left; padding: 6px 10px; background: var(--paper-dark); font-weight: 600; border-bottom: 1px solid var(--border); }
+  .plan-table td { padding: 6px 10px; border-bottom: 1px solid var(--paper-dark); vertical-align: top; }
+  .plan-table tr:last-child td { border-bottom: none; }
+  .plan-table .fill-bar { display: inline-block; height: 7px; border-radius: 99px; background: var(--accent); opacity: .7; }
+  .plan-table .overfill { color: var(--danger); font-weight: 600; }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 13px; font-weight: 600; padding: 10px 22px; border-radius: 4px; border: none; cursor: pointer; transition: opacity .15s, transform .1s; text-decoration: none; }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-h); }
+  .btn-primary:disabled { background: var(--border); color: var(--mid); cursor: not-allowed; transform: none; }
+  .btn-ghost { background: none; color: var(--accent); border: 1.5px solid var(--accent); }
+  .btn-ghost:hover { background: #f0f4fa; }
+  .btn-sm { padding: 5px 13px; font-size: 11px; }
+
+  /* progress */
+  .progress-block { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 16px 18px; display: none; margin-top: 16px; }
+  .progress-block.visible { display: block; }
+  .progress-label { font-family: var(--mono); font-size: 12px; color: var(--mid); margin-bottom: 8px; }
+  .progress-track { height: 8px; background: var(--paper-dark); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
+  .progress-status { font-family: var(--mono); font-size: 12px; margin-top: 8px; }
+
+  /* status */
+  .status-box { border-left: 3px solid var(--accent); background: white; padding: 12px 16px; border-radius: 0 4px 4px 0; font-family: var(--mono); font-size: 13px; line-height: 1.8; display: none; }
+  .status-box.visible { display: block; }
+  .status-box.error { border-left-color: var(--danger); }
+  .status-box.ok { border-left-color: #15803d; }
+
+  /* downloads */
+  .downloads { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; }
+  .dl-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: white; border: 1px solid var(--border); border-radius: 4px; }
+  .dl-num { font-family: var(--mono); font-size: 11px; color: var(--mid); width: 20px; flex-shrink: 0; }
+  .dl-name { font-family: var(--mono); font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-size { font-family: var(--mono); font-size: 11px; color: var(--mid); white-space: nowrap; }
+  .dl-ready { color: var(--success); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+  .dl-pending { color: var(--mid); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+
+  /* decode */
+  .decode-result { background: white; border: 1px solid var(--border); border-radius: 4px; padding: 14px; font-family: var(--mono); font-size: 13px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; min-height: 100px; max-height: 420px; overflow-y: auto; display: none; }
+  .decode-result.visible { display: block; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  canvas { display: none; }
+
+  @media(max-width:600px) {
+    header, .tabs, .view { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LSB·STEGO</h1>
+  <span>прячем текст в пиксели · LSB-стеганография</span>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" onclick="switchTab('encode')">Закодировать</button>
+  <button class="tab" onclick="switchTab('decode')">Раскодировать</button>
+</nav>
+
+<!-- ═══ ENCODE ═══ -->
+<div id="view-encode" class="view active">
+
+  <section>
+    <span class="label">Текст для скрытия</span>
+    <textarea id="message" placeholder="Вставьте текст любого размера…" oninput="onTextChange()"></textarea>
+    <div class="char-count" id="char-display">0 символов · 0 бит</div>
+  </section>
+
+  <section>
+    <span class="label">Картинки-обложки (PNG, любое разрешение)</span>
+    <div class="drop-zone" id="drop-zone"
+         onclick="document.getElementById('img-input').click()"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+      <input type="file" id="img-input" accept=".png,image/png" multiple onchange="onFileSelect(event)">
+      <div class="drop-hint">
+        <strong>Нажмите</strong> или перетащите PNG-файлы
+        <small>Только PNG — JPEG и WEBP сжимают и уничтожают скрытые данные</small>
+      </div>
+    </div>
+    <div class="slots" id="slots"></div>
+  </section>
+
+  <section>
+    <span class="label">Вместимость</span>
+    <div class="cap-block">
+      <div class="cap-header">
+        <span class="cap-title">Текст / Суммарная ёмкость</span>
+        <span class="cap-numbers" id="cap-numbers">— / —</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill safe" id="bar" style="width:0%"></div></div>
+      <div class="cap-note" id="cap-note">Добавьте текст и картинки</div>
+    </div>
+  </section>
+
+  <section id="plan-section" style="display:none">
+    <span class="label">Как текст разобьётся по картинкам</span>
+    <table class="plan-table" id="plan-table">
+      <thead><tr><th>#</th><th>Файл</th><th>Разрешение</th><th>Символов в этой части</th><th>Заполнение</th></tr></thead>
+      <tbody id="plan-body"></tbody>
+    </table>
+  </section>
+
+  <hr>
+
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button class="btn btn-primary" id="encode-btn" disabled onclick="startEncode()">
+      Закодировать →
+    </button>
+    <span style="font-family:var(--mono);font-size:12px;color:var(--mid)" id="encode-hint">
+      Добавьте текст и картинки
+    </span>
+  </div>
+
+  <div class="progress-block" id="progress-block">
+    <div class="progress-label" id="progress-label">Обрабатываю…</div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    <div class="progress-status" id="progress-status"></div>
+  </div>
+
+  <div id="downloads-wrap" style="display:none; margin-top:16px">
+    <span class="label">Готовые файлы — скачивай по порядку</span>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--warn);margin-bottom:8px">
+      ⚠ В Телеграме отправляй как <strong>файл (документ)</strong>, не как фото — иначе сжатие уничтожит данные
+    </div>
+    <div class="downloads" id="dl-list"></div>
+  </div>
+
+</div>
+
+<!-- ═══ DECODE ═══ -->
+<div id="view-decode" class="view">
+
+  <section>
+    <span class="label">PNG-файлы для раскодирования</span>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--mid);margin-bottom:10px">
+      Если текст был разбит на несколько картинок — загрузи все, результат склеится автоматически.
+    </p>
+    <div class="drop-zone" id="decode-drop"
+         onclick="document.getElementById('decode-input').click()"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDecodeDrop(event)">
+      <input type="file" id="decode-input" accept=".png,image/png" multiple onchange="onDecodeSelect(event)">
+      <div class="drop-hint"><strong>Нажмите</strong> или перетащите PNG-файлы</div>
+    </div>
+    <div class="slots" id="decode-slots" style="margin-top:10px"></div>
+  </section>
+
+  <hr>
+
+  <button class="btn btn-primary" id="decode-btn" disabled onclick="startDecode()">
+    Раскодировать →
+  </button>
+
+  <div class="progress-block" id="decode-progress">
+    <div class="progress-label" id="decode-progress-label">Читаю…</div>
+    <div class="progress-track"><div class="progress-fill" id="decode-progress-fill" style="width:0%"></div></div>
+  </div>
+
+  <div style="margin-top:16px;display:none" id="decode-output-wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <span class="label" style="margin:0">Извлечённый текст</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="copyDecoded()">Копировать</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadDecoded()">Скачать .txt</button>
+      </div>
+    </div>
+    <div class="decode-result visible" id="decode-result"></div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--mid);margin-top:5px" id="decode-stats"></div>
+  </div>
+
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ─────────────────────────────────────────────
+//  CONSTANTS & STATE
+// ─────────────────────────────────────────────
+
+const STOP = "###END###";
+
+const enc = {
+  messageText: "",
+  messageBits: 0,
+  images: [],        // {file, name, w, h, pixels, url}
+  plan: [],          // {imgIdx, chunk} — computed by buildPlan()
+};
+
+const dec = {
+  files: [],
+};
+
+// ─────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────
+
+function textToBits(text) {
+  const bytes = new TextEncoder().encode(text);
+  const bits = new Uint8Array(bytes.length * 8);
+  let b = 0;
+  for (const byte of bytes)
+    for (let i = 7; i >= 0; i--) bits[b++] = (byte >> i) & 1;
+  return bits;
+}
+
+function bitsToText(bits) {
+  const bytes = new Uint8Array(Math.floor(bits.length / 8));
+  for (let i = 0; i < bytes.length; i++) {
+    let v = 0;
+    for (let j = 0; j < 8; j++) v = (v << 1) | bits[i * 8 + j];
+    bytes[i] = v;
+  }
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+const STOP_BITS = textToBits(STOP);
+
+function fmt(n) { return n.toLocaleString('ru-RU'); }
+
+function imgCapacityBits(w, h) {
+  // 1 bit per pixel (LSB of red channel)
+  return w * h;
+}
+
+function imgCapacityChars(w, h) {
+  // Worst case: UTF-8 кириллица = 2 байта = 16 бит/симв
+  return Math.floor((imgCapacityBits(w, h) - STOP_BITS.length) / 16);
+}
+
+// ─────────────────────────────────────────────
+//  TABS
+// ─────────────────────────────────────────────
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t, i) =>
+    t.classList.toggle('active', ['encode','decode'][i] === id));
+  document.querySelectorAll('.view').forEach(v =>
+    v.classList.toggle('active', v.id === 'view-' + id));
+}
+
+// ─────────────────────────────────────────────
+//  TEXT INPUT
+// ─────────────────────────────────────────────
+
+function onTextChange() {
+  enc.messageText = document.getElementById('message').value;
+  const bits = textToBits(enc.messageText + STOP);
+  enc.messageBits = bits.length;
+  document.getElementById('char-display').textContent =
+    `${fmt(enc.messageText.length)} симв. · ${fmt(enc.messageBits)} бит`;
+  recalc();
+}
+
+// ─────────────────────────────────────────────
+//  IMAGE LOADING
+// ─────────────────────────────────────────────
+
+function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function onDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault(); e.currentTarget.classList.remove('dragover');
+  addFiles([...e.dataTransfer.files]);
+}
+function onFileSelect(e) { addFiles([...e.target.files]); e.target.value = ''; }
+
+function addFiles(files) {
+  files.filter(f => f.name.toLowerCase().endsWith('.png') || f.type === 'image/png')
+       .forEach(loadImgFile);
+}
+
+function loadImgFile(file) {
+  if (enc.images.find(im => im.name === file.name && im.file.size === file.size)) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    enc.images.push({ file, name: file.name, w: img.naturalWidth, h: img.naturalHeight,
+                      pixels: img.naturalWidth * img.naturalHeight, url });
+    renderSlots();
+    recalc();
+  };
+  img.src = url;
+}
+
+function removeImage(idx) {
+  URL.revokeObjectURL(enc.images[idx].url);
+  enc.images.splice(idx, 1);
+  renderSlots();
+  recalc();
+}
+
+function renderSlots() {
+  const el = document.getElementById('slots');
+  if (!enc.images.length) { el.innerHTML = ''; return; }
+  el.innerHTML = enc.images.map((im, i) => {
+    const cap = imgCapacityChars(im.w, im.h);
+    return `<div class="slot">
+      <img class="slot-thumb" src="${im.url}" alt="">
+      <div class="slot-info">
+        <div class="slot-name">${im.name}</div>
+        <div class="slot-meta">${fmt(im.w)}×${fmt(im.h)} · ~${fmt(cap)} кирилл. симв.</div>
+      </div>
+      <button class="slot-remove" onclick="removeImage(${i})">×</button>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+//  PLAN: distribute text across images
+//  Each image gets a chunk proportional to its capacity.
+//  Breaks on word boundaries.
+// ─────────────────────────────────────────────
+
+function buildPlan() {
+  // Returns array of {imgIdx, chunk} or null if doesn't fit
+  if (!enc.images.length || !enc.messageText) return [];
+
+  const stopLen = STOP_BITS.length;
+  const parts = [];
+  let remaining = enc.messageText;
+
+  for (let i = 0; i < enc.images.length && remaining.length > 0; i++) {
+    const avail = enc.images[i].pixels - stopLen; // bits available
+    if (avail <= 0) continue;
+
+    // Binary search: find max prefix of `remaining` that fits in avail bits
+    let lo = 0, hi = remaining.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      const bLen = textToBits(remaining.slice(0, mid)).length;
+      if (bLen <= avail) lo = mid; else hi = mid - 1;
+    }
+    if (lo === 0) continue; // image too small for even 1 char
+
+    // Snap to word boundary (don't break mid-word)
+    let cut = lo;
+    if (cut < remaining.length) {
+      const lastSpace = remaining.lastIndexOf(' ', cut);
+      if (lastSpace > Math.floor(lo * 0.6)) cut = lastSpace;
+    }
+
+    const chunk = remaining.slice(0, cut).trimEnd();
+    remaining = remaining.slice(cut).trimStart();
+    parts.push({ imgIdx: i, chunk });
+  }
+
+  if (remaining.length > 0) return null; // didn't fit
+  return parts;
+}
+
+// ─────────────────────────────────────────────
+//  RECALC — runs after any change
+// ─────────────────────────────────────────────
+
+function recalc() {
+  const totalCap = enc.images.reduce((s, im) => s + im.pixels, 0);
+  const need = enc.messageBits;
+  const have = totalCap;
+
+  // Capacity bar
+  const bar  = document.getElementById('bar');
+  const note = document.getElementById('cap-note');
+  const nums = document.getElementById('cap-numbers');
+
+  if (!need && !have) {
+    bar.style.width = '0%'; bar.className = 'bar-fill safe';
+    note.textContent = 'Добавьте текст и картинки'; note.className = 'cap-note';
+    nums.textContent = '— / —';
+  } else {
+    nums.textContent = `${fmt(need)} / ${fmt(have)} бит`;
+    if (!have) {
+      bar.style.width = '0%';
+      note.textContent = 'Добавьте PNG-картинки'; note.className = 'cap-note need-more';
+    } else if (!need) {
+      bar.style.width = '0%'; bar.className = 'bar-fill safe';
+      const sc = enc.images.reduce((s,im) => s + imgCapacityChars(im.w,im.h), 0);
+      note.textContent = `Суммарная ёмкость: ~${fmt(sc)} симв. кириллицы`; note.className = 'cap-note';
+    } else {
+      const pct = need / have;
+      bar.style.width = Math.min(100, Math.round(pct * 100)) + '%';
+      if (pct <= 1) {
+        bar.className = pct > 0.88 ? 'bar-fill warning' : 'bar-fill safe';
+        const free = Math.floor((have - need) / 16);
+        note.textContent = `✓ Влезает. Свободно ещё ~${fmt(free)} симв.`; note.className = 'cap-note ok';
+      } else {
+        bar.className = 'bar-fill over';
+        const short = Math.ceil((need - have) / 16);
+        // Suggest how many more similar images needed
+        const avgCap = have / Math.max(1, enc.images.length);
+        const extraImgs = Math.ceil((need - have) / avgCap);
+        note.textContent = `✗ Не хватает ~${fmt(short)} симв. — добавьте ещё ${extraImgs} похожую картинку${extraImgs > 1 ? 'и' : 'у'}.`;
+        note.className = 'cap-note need-more';
+      }
+    }
+  }
+
+  // Plan table
+  const plan = buildPlan();
+  enc.plan = plan;
+  const planSection = document.getElementById('plan-section');
+  const planBody = document.getElementById('plan-body');
+
+  if (plan && plan.length > 0 && enc.images.length > 0 && enc.messageText) {
+    planSection.style.display = '';
+    planBody.innerHTML = plan.map((p, i) => {
+      const im = enc.images[p.imgIdx];
+      const bitsUsed = textToBits(p.chunk + STOP).length;
+      const pct = Math.round(bitsUsed * 100 / im.pixels);
+      const barW = Math.min(80, Math.round(pct * 0.8));
+      return `<tr>
+        <td>${i + 1}</td>
+        <td>${im.name}</td>
+        <td>${fmt(im.w)}×${fmt(im.h)}</td>
+        <td>${fmt(p.chunk.length)}</td>
+        <td>
+          <span class="fill-bar" style="width:${barW}px"></span>
+          <span style="font-size:11px;margin-left:5px;color:var(--mid)">${pct}%</span>
+        </td>
+      </tr>`;
+    }).join('');
+  } else if (!plan && enc.messageText && enc.images.length) {
+    planSection.style.display = '';
+    planBody.innerHTML = `<tr><td colspan="5" class="overfill" style="padding:10px">
+      Текст не влезает в добавленные картинки — добавьте ещё
+    </td></tr>`;
+  } else {
+    planSection.style.display = 'none';
+  }
+
+  updateEncodeBtn();
+}
+
+function updateEncodeBtn() {
+  const btn  = document.getElementById('encode-btn');
+  const hint = document.getElementById('encode-hint');
+  const ready = enc.messageText.trim() && enc.images.length && enc.plan && enc.plan.length > 0;
+  btn.disabled = !ready;
+  if (!enc.messageText.trim()) hint.textContent = 'Добавьте текст';
+  else if (!enc.images.length) hint.textContent = 'Добавьте хотя бы одну PNG-картинку';
+  else if (!enc.plan) hint.textContent = 'Текст не влезает — добавьте ещё картинки';
+  else hint.textContent = `${enc.plan.length} файл(а) на выходе`;
+}
+
+// ─────────────────────────────────────────────
+//  ENCODE — sequential, one image at a time
+// ─────────────────────────────────────────────
+
+async function startEncode() {
+  if (!enc.plan || !enc.plan.length) return;
+  const btn = document.getElementById('encode-btn');
+  btn.disabled = true;
+
+  const progressBlock = document.getElementById('progress-block');
+  const progressLabel = document.getElementById('progress-label');
+  const progressFill  = document.getElementById('progress-fill');
+  const progressStatus = document.getElementById('progress-status');
+  progressBlock.classList.add('visible');
+
+  // Prepare download list UI immediately (pending state)
+  const dlWrap = document.getElementById('downloads-wrap');
+  const dlList = document.getElementById('dl-list');
+  dlList.innerHTML = '';
+  dlWrap.style.display = 'block';
+
+  const total = enc.plan.length;
+  const dlItems = [];
+
+  for (let i = 0; i < total; i++) {
+    const p = enc.plan[i];
+    const im = enc.images[p.imgIdx];
+    const outName = total === 1 ? `stego_${im.name}` : `stego_${String(i+1).padStart(2,'0')}_${im.name}`;
+    dlList.innerHTML += `<div class="dl-item" id="dl-${i}">
+      <span class="dl-num">${i + 1}</span>
+      <span class="dl-name">${outName}</span>
+      <span class="dl-size" id="dl-size-${i}">…</span>
+      <span class="dl-pending" id="dl-status-${i}">ожидание</span>
+    </div>`;
+    dlItems.push({ outName, p, im });
+  }
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  for (let i = 0; i < total; i++) {
+    const { outName, p, im } = dlItems[i];
+
+    progressLabel.textContent = `Файл ${i + 1} из ${total}: ${im.name}`;
+    progressFill.style.width = Math.round(i * 100 / total) + '%';
+    progressStatus.textContent = `Кодирую…`;
+
+    document.getElementById(`dl-status-${i}`).className = 'dl-pending';
+    document.getElementById(`dl-status-${i}`).textContent = 'обрабатывается…';
+
+    // Draw image onto canvas
+    await new Promise(res => {
+      const img = new Image();
+      canvas.width  = im.w;
+      canvas.height = im.h;
+      img.onload = () => { ctx.drawImage(img, 0, 0); res(); };
+      img.src = im.url;
+    });
+
+    // Get pixel data and embed bits
+    const imgData = ctx.getImageData(0, 0, im.w, im.h);
+    const px = imgData.data;
+    const bits = textToBits(p.chunk + STOP);
+
+    for (let b = 0; b < bits.length; b++) {
+      px[b * 4] = (px[b * 4] & 0xFE) | bits[b]; // red channel LSB
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+
+    // Export PNG blob
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    const url  = URL.createObjectURL(blob);
+    const sizeKB = Math.round(blob.size / 1024);
+
+    // Update row with download link
+    const row = document.getElementById(`dl-${i}`);
+    document.getElementById(`dl-size-${i}`).textContent = `${sizeKB} KB`;
+    const statusEl = document.getElementById(`dl-status-${i}`);
+    statusEl.outerHTML = `<a class="btn btn-ghost btn-sm" href="${url}" download="${outName}">Скачать</a>`;
+
+    progressStatus.textContent = `Файл ${i + 1} готов — ${fmt(p.chunk.length)} символов`;
+
+    // yield to browser so UI updates
+    await new Promise(res => setTimeout(res, 30));
+  }
+
+  progressFill.style.width = '100%';
+  progressLabel.textContent = '✓ Все файлы готовы';
+  progressStatus.textContent = total > 1
+    ? `Публикуй в ТГ как документы, по порядку номеров.`
+    : `Публикуй в ТГ как файл (не как фото).`;
+
+  btn.disabled = false;
+}
+
+// ─────────────────────────────────────────────
+//  DECODE
+// ─────────────────────────────────────────────
+
+function onDecodeDrop(e) {
+  e.preventDefault(); e.currentTarget.classList.remove('dragover');
+  addDecodeFiles([...e.dataTransfer.files]);
+}
+function onDecodeSelect(e) { addDecodeFiles([...e.target.files]); e.target.value = ''; }
+function addDecodeFiles(files) {
+  files.filter(f => f.name.toLowerCase().endsWith('.png') || f.type === 'image/png')
+       .forEach(f => {
+         if (!dec.files.find(d => d.name === f.name && d.size === f.size)) dec.files.push(f);
+       });
+  renderDecodeSlots();
+  document.getElementById('decode-btn').disabled = dec.files.length === 0;
+}
+function removeDecodeFile(idx) {
+  dec.files.splice(idx, 1);
+  renderDecodeSlots();
+  document.getElementById('decode-btn').disabled = dec.files.length === 0;
+}
+function renderDecodeSlots() {
+  const el = document.getElementById('decode-slots');
+  if (!dec.files.length) { el.innerHTML = ''; return; }
+  el.innerHTML = dec.files.map((f, i) => `
+    <div class="slot">
+      <div class="slot-info">
+        <div class="slot-name">${i + 1}. ${f.name}</div>
+        <div class="slot-meta">${Math.round(f.size / 1024)} KB</div>
+      </div>
+      <button class="slot-remove" onclick="removeDecodeFile(${i})">×</button>
+    </div>`).join('');
+}
+
+async function decodeOneFile(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.getElementById('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      const px = ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight).data;
+      const total = img.naturalWidth * img.naturalHeight;
+
+      // Extract LSB of red channel
+      const bits = new Uint8Array(total);
+      for (let i = 0; i < total; i++) bits[i] = px[i * 4] & 1;
+
+      // Find stop marker
+      const sl = STOP_BITS.length;
+      let stopAt = -1;
+      outer: for (let i = 0; i <= total - sl; i++) {
+        for (let j = 0; j < sl; j++) if (bits[i + j] !== STOP_BITS[j]) continue outer;
+        stopAt = i; break;
+      }
+
+      if (stopAt === -1) { resolve({ ok: false, text: '' }); return; }
+      resolve({ ok: true, text: bitsToText(bits.slice(0, stopAt)) });
+    };
+    img.onerror = () => resolve({ ok: false, text: '' });
+    img.src = url;
+  });
+}
+
+async function startDecode() {
+  const btn = document.getElementById('decode-btn');
+  btn.disabled = true;
+  document.getElementById('decode-output-wrap').style.display = 'none';
+
+  const prog = document.getElementById('decode-progress');
+  const progFill = document.getElementById('decode-progress-fill');
+  const progLabel = document.getElementById('decode-progress-label');
+  prog.classList.add('visible');
+
+  const parts = [];
+  for (let i = 0; i < dec.files.length; i++) {
+    progLabel.textContent = `Читаю файл ${i + 1}/${dec.files.length}: ${dec.files[i].name}…`;
+    progFill.style.width = Math.round(i * 100 / dec.files.length) + '%';
+    const r = await decodeOneFile(dec.files[i]);
+
+    // update slot row
+    const slots = document.getElementById('decode-slots').querySelectorAll('.slot');
+    if (slots[i]) {
+      const s = document.createElement('span');
+      s.className = 'slot-cap ' + (r.ok ? 'ok' : 'over');
+      s.textContent = r.ok ? `✓ ${fmt(r.text.length)} симв.` : '✗ не найдено';
+      slots[i].appendChild(s);
+    }
+
+    if (r.ok) parts.push(r.text);
+    await new Promise(res => setTimeout(res, 20));
+  }
+
+  progFill.style.width = '100%';
+  progLabel.textContent = parts.length > 0 ? `✓ Готово` : '✗ Текст не найден';
+
+  if (parts.length === 0) {
+    prog.querySelector('.progress-label').style.color = 'var(--danger)';
+    btn.disabled = false;
+    return;
+  }
+
+  const full = parts.join('\n\n');
+  document.getElementById('decode-result').textContent = full;
+  document.getElementById('decode-stats').textContent =
+    `${fmt(full.length)} символов · из ${parts.length} файл(а)`;
+  document.getElementById('decode-output-wrap').style.display = 'block';
+  btn.disabled = false;
+}
+
+function copyDecoded() {
+  navigator.clipboard.writeText(document.getElementById('decode-result').textContent).catch(()=>{});
+}
+function downloadDecoded() {
+  const blob = new Blob([document.getElementById('decode-result').textContent], { type: 'text/plain;charset=utf-8' });
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'decoded.txt' });
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+</script>
+</body>
+</html>
